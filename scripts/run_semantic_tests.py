@@ -10,7 +10,7 @@ r"""Run the translator regression suite (tests/semantic) one process per test fi
 pattern so the shell does not expand it. Only Python module filenames are selected, including inside packages;
 the pattern matches their basenames, not directory paths. Package `__init__.py` modules are always included,
 because discover imports them and runs any TestCase they define regardless of the pattern. No matching files is an
-error in serial and parallel runs.
+error in serial and parallel runs. `-j` / `--jobs` must be a positive integer.
 
 It runs the files `python -m unittest discover -s tests/semantic` finds (`test*.py` by default, and packages below it), each in its own process from that folder, so a file sees the same import path as under discover.
 
@@ -85,6 +85,16 @@ def test_modules(directory, pattern="test*.py"):
     return names
 
 
+def positive_jobs(value):
+    try:
+        jobs = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("jobs must be a positive integer") from None
+    if jobs < 1:
+        raise argparse.ArgumentTypeError("jobs must be a positive integer")
+    return jobs
+
+
 def positive_seconds(value):
     seconds = float(value)
     if not math.isfinite(seconds) or not 0 < seconds <= MAX_TIMEOUT_SECONDS:
@@ -135,7 +145,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("directory", help="the suite's folder, tests/semantic")
     ap.add_argument("-p", "--pattern", default="test*.py", help="test filename glob (default: test*.py)")
-    ap.add_argument("-j", "--jobs", type=int, default=os.cpu_count() or 1, help="files at a time (default: cores)")
+    ap.add_argument("-j", "--jobs", type=positive_jobs, default=os.cpu_count() or 1, help="positive number of files at a time (default: cores)")
     ap.add_argument("-v", "--verbose", action="store_true", help="unittest -v, and print passing files' output")
     ap.add_argument("--timeout", type=positive_seconds, default=None, metavar="SECONDS",
                     help=f"positive finite time limit up to {MAX_TIMEOUT_SECONDS} seconds (24 hours) per module "
@@ -146,7 +156,7 @@ def main(argv=None):
     if not modules:
         print(f"no {a.pattern} files in {directory}")
         return 1
-    if a.jobs <= 1:
+    if a.jobs == 1:
         try:
             return subprocess.call([sys.executable, "-m", "unittest", "discover", "-s", directory,
                                     "-p", a.pattern, *(["-v"] if a.verbose else [])], timeout=a.timeout)

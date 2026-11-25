@@ -239,6 +239,17 @@ class RunnerTest(unittest.TestCase):
                 result = cli(tmp, "-j", str(jobs))
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_jobs_must_be_positive_before_running_tests(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            marker = os.path.join(tmp, "ran")
+            suite(tmp, {"test_marker.py": "open(" + repr(marker) + ", 'w').close()\n"})
+            for value in ("0", "-1", "nope"):
+                with self.subTest(value=value):
+                    result = cli(tmp, "--jobs", value)
+                    self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                    self.assertIn("jobs must be a positive integer", result.stderr)
+                    self.assertFalse(os.path.exists(marker))
+
     def test_empty_package_alone_is_not_a_false_green(self):
         # -j 1 forwards to discover, which exits 5 when nothing ran; a parallel run whose only job is an empty
         # initializer must not report success either.
